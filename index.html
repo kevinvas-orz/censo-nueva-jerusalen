@@ -128,28 +128,20 @@ table.log td{padding:7px 4px;border-bottom:1px solid #eef1f5}
       <input id="cfgNombre" placeholder="Ej. María López" autocomplete="name">
     </div>
     <div class="campo">
-      <label class="req">Puesto donde estás</label>
-      <div class="chips" id="cfgPuesto">
-        <span class="chip" data-v="Puerta principal">Puerta principal</span>
-        <span class="chip" data-v="Puerta lateral">Puerta lateral</span>
-        <span class="chip" data-v="Mesa dentro del templo">Mesa adentro</span>
-        <span class="chip" data-v="Área infantil">Área infantil</span>
-        <span class="chip" data-v="Otro">Otro</span>
-      </div>
-    </div>
-    <div class="campo">
       <label class="req">Domingo del censo</label>
       <select id="cfgDomingo">
         <option value="Domingo 1">Domingo 1</option>
         <option value="Domingo 2">Domingo 2</option>
         <option value="Domingo 3">Domingo 3</option>
+        <option value="Domingo 4">Domingo 4</option>
+        <option value="Domingo 5">Domingo 5</option>
       </select>
-      <p class="hint"><b>Cámbialo cada domingo.</b> De esto depende saber en cuál de los tres
-      domingos se censó a cada persona.</p>
+      <p class="hint"><b>Cámbialo cada domingo.</b> De esto depende saber en cuál domingo se
+      censó a cada persona.</p>
     </div>
     <button class="btn-p" id="btnCfgOk" onclick="guardarConfig()">Comenzar</button>
     <button class="btn-g oculto" id="btnCfgCancel" style="margin-top:8px" onclick="volver()">Cancelar</button>
-    <p class="err oculto" id="cfgErr">Completa tu nombre, tu puesto y el domingo.</p>
+    <p class="err oculto" id="cfgErr">Escribe tu nombre y elige el domingo.</p>
 
     <div class="zonaPeligro oculto" id="zonaReinicio">
       <h4>Empezar de cero</h4>
@@ -461,10 +453,6 @@ function init(){
   llenarSelect($('f_dep'), CATALOGOS.dep);
   llenarSelect($('f_cargoOrg'), CATALOGOS.orgs);
   llenarSelect($('f_cargoPuesto'), CATALOGOS.puestos);
-  $('cfgPuesto').querySelectorAll('.chip').forEach(c=>c.onclick=()=>{
-    $('cfgPuesto').querySelectorAll('.chip').forEach(x=>x.classList.remove('on'));
-    c.classList.add('on');
-  });
   $('f_fnac').onchange = mostrarEdad;
   if(cfg){ pintarHeader(); pintarHoy(); mostrar('pBuscar'); }
   else abrirConfig();
@@ -474,9 +462,8 @@ function init(){
 
 function guardarConfig(){
   const n = $('cfgNombre').value.trim();
-  const p = chipVal($('cfgPuesto'));
-  if(!n || !p){ $('cfgErr').classList.remove('oculto'); return; }
-  cfg = { entrevistador:n, puesto:p, domingo:$('cfgDomingo').value };
+  if(!n){ $('cfgErr').classList.remove('oculto'); return; }
+  cfg = { entrevistador:n, domingo:$('cfgDomingo').value };
   localStorage.setItem(LS.cfg, JSON.stringify(cfg));
   pintarHeader(); pintarHoy(); mostrar('pBuscar');
 }
@@ -487,7 +474,6 @@ function abrirConfig(){
   const yaHay = !!cfg;
   if(yaHay){
     $('cfgNombre').value = cfg.entrevistador;
-    setChip($('cfgPuesto'), cfg.puesto);
     $('cfgDomingo').value = cfg.domingo;
   }
   $('cfgPaso').textContent   = yaHay ? 'Mis datos' : 'Antes de empezar';
@@ -517,7 +503,7 @@ function reiniciarTodo(){
 
 function pintarHeader(){
   $('hdrMeta').textContent = cfg.entrevistador.split(' ')[0]+' · '+cfg.domingo;
-  $('quienTxt').innerHTML = '<b>'+cfg.entrevistador+'</b> · '+cfg.puesto+' · <b>'+cfg.domingo+'</b>';
+  $('quienTxt').innerHTML = '<b>'+cfg.entrevistador+'</b> · <b>'+cfg.domingo+'</b>';
 }
 
 function mostrar(id){
@@ -667,7 +653,7 @@ function guardarRegistro(){
     uid: Date.now()+'-'+Math.random().toString(36).slice(2,7),
     enviado_en: new Date().toISOString(),
     entrevistador: cfg.entrevistador,
-    puesto: cfg.puesto,
+    puesto: '',
     domingo: cfg.domingo,
     tipo: actual ? 'Confirmacion' : 'Nuevo',
     id_banco: actual ? actual.id : '',
