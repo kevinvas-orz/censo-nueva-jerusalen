@@ -103,6 +103,15 @@ table.log td{padding:7px 4px;border-bottom:1px solid #eef1f5}
 .zonaPeligro{border-top:1px solid var(--borde);margin-top:20px;padding-top:16px}
 .zonaPeligro h4{font-size:14px;margin:0 0 4px;color:#8f1515;text-transform:uppercase;
   letter-spacing:1px;font-weight:800}
+.tituloRes{font-size:11.5px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;
+  color:var(--dorado-osc);margin:16px 0 7px;display:flex;align-items:center;gap:8px}
+.tituloRes::after{content:"";flex:1;height:2px;background:var(--dorado-claro)}
+.res.parecido{border-style:dashed;border-color:var(--dorado)}
+.res.parecido .flecha{color:var(--dorado-osc)}
+.avisoNuevo{background:var(--dorado-claro);border:1px solid #f0c979;border-radius:9px;
+  padding:9px 12px;font-size:13px;color:#6b4708;margin:14px 0 8px}
+.b-dom{background:#0f7b3d;color:#fff}
+.b-hoy{background:var(--azul);color:#fff}
 </style>
 </head>
 <body>
@@ -125,7 +134,10 @@ table.log td{padding:7px 4px;border-bottom:1px solid #eef1f5}
     <p class="hint" id="cfgSub">Queda guardado en este dispositivo. Puedes cambiarlo cuando quieras.</p>
     <div class="campo" style="margin-top:16px">
       <label class="req">Tu nombre (entrevistador)</label>
-      <input id="cfgNombre" placeholder="Ej. María López" autocomplete="name">
+      <select id="cfgLista" onchange="cambioEntrevistador()"></select>
+      <input id="cfgNombre" class="oculto" style="margin-top:8px"
+             placeholder="Escribe tu nombre completo" autocapitalize="words" autocomplete="name">
+      <p class="hint">Elige tu nombre de la lista. Si no está, escoge <b>Otro</b> y escríbelo.</p>
     </div>
     <div class="campo">
       <label class="req">Domingo del censo</label>
@@ -141,7 +153,7 @@ table.log td{padding:7px 4px;border-bottom:1px solid #eef1f5}
     </div>
     <button class="btn-p" id="btnCfgOk" onclick="guardarConfig()">Comenzar</button>
     <button class="btn-g oculto" id="btnCfgCancel" style="margin-top:8px" onclick="volver()">Cancelar</button>
-    <p class="err oculto" id="cfgErr">Escribe tu nombre y elige el domingo.</p>
+    <p class="err oculto" id="cfgErr">Elige tu nombre y el domingo.</p>
 
     <div class="zonaPeligro oculto" id="zonaReinicio">
       <h4>Empezar de cero</h4>
@@ -169,6 +181,10 @@ table.log td{padding:7px 4px;border-bottom:1px solid #eef1f5}
              oninput="buscar()" inputmode="text">
     </div>
     <div id="resultados"></div>
+    <div class="avisoNuevo oculto" id="avisoNuevo">
+      ⚠️ <b>Antes de crear una persona nueva</b>, revisa la lista de arriba. Los nombres del
+      banco a veces están escritos distinto o incompletos.
+    </div>
     <button class="btn-s" style="margin-top:6px" onclick="abrirForm(null)">
       ➕ No aparece — registrar como persona nueva
     </button>
@@ -358,6 +374,11 @@ table.log td{padding:7px 4px;border-bottom:1px solid #eef1f5}
    ========================================================== */
 
 const CATALOGOS = {
+  // Equipo de entrevistadores. Se eligen de lista para que el nombre no se
+  // escriba de dos formas distintas ("Rene" y "René" partieron a una persona
+  // en dos filas al analizar el Domingo 1).
+  equipo:   ["Alba Abigail Orozco Payes","Karla Orozco","Kevin Vásquez","Maylín Arriaza",
+             "Mayérlin Ortíz","René Barrera","Steffany Peláez Carranza"],
   ecivil:   ["","Soltero(a)","Casado(a)","Unido(a) de hecho","Divorciado(a)","Viudo(a)"],
   canal:    ["Iglesia Infantil","Embajadores de Cristo","Fraternidad de Varones","Concilio Misionero Femenil"],
   // Grupos de niños. data-v = valor exacto del catálogo del banco.
@@ -394,6 +415,50 @@ const guardarLS = () => {
   localStorage.setItem(LS.hechos, JSON.stringify(hechos));
 };
 const norm = s => (s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
+
+/* --- Búsqueda tolerante a errores de escritura -------------------------------
+   El Domingo 1, 30 personas que SÍ estaban en el banco se registraron como
+   nuevas porque el buscador exigía coincidencia exacta. Estas funciones
+   permiten que "Hernadez" encuentre a "Hernández" y que un apellido de casada
+   de más ("De Roche") no tumbe la búsqueda.                                  */
+const PARTICULAS = new Set(['de','del','la','las','los','y','da']);
+const partir = s => norm(s).split(/[^a-z0-9]+/).filter(w=>w.length>1 && !PARTICULAS.has(w));
+
+function distancia(a,b){            // Levenshtein, cortado por longitud
+  if(a===b) return 0;
+  if(Math.abs(a.length-b.length)>2) return 9;
+  let prev=[...Array(b.length+1).keys()];
+  for(let i=1;i<=a.length;i++){
+    const fila=[i];
+    for(let j=1;j<=b.length;j++)
+      fila.push(Math.min(prev[j]+1, fila[j-1]+1, prev[j-1]+(a[i-1]===b[j-1]?0:1)));
+    prev=fila;
+  }
+  return prev[b.length];
+}
+
+function puntosPalabra(q,w){        // qué tan bien la palabra escrita casa con la del padrón
+  if(w===q) return 4;
+  if(w.startsWith(q)) return 3;
+  if(q.length>=4){
+    const d = distancia(q,w);
+    if(d<=1) return 2;
+    if(Math.min(q.length,w.length)>=7 && d<=2) return 1;
+    if(w.indexOf(q)>0) return 1;
+  }
+  return 0;
+}
+
+function calificar(consulta, tks){
+  let total=0, coinciden=0, exactos=0;
+  for(const q of consulta){
+    let mejor=0;
+    for(const w of tks){ const pt=puntosPalabra(q,w); if(pt>mejor) mejor=pt; }
+    if(mejor>0){ coinciden++; total+=mejor; }
+    if(mejor>=3) exactos++;
+  }
+  return {total, coinciden, exactos};
+}
 const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
 
 /* ---------- chips reutilizables ---------- */
@@ -449,6 +514,9 @@ function init(){
   pintarChips($('f_estado'), CATALOGOS.estado, false);
   pintarChips($('f_bautizado'), CATALOGOS.sino, false);
   pintarChips($('f_tieneCargo'), ["No","Si"], false);
+  $('cfgLista').innerHTML = '<option value="">— Elige tu nombre —</option>'
+    + CATALOGOS.equipo.map(v=>`<option value="${esc(v)}">${v}</option>`).join('')
+    + '<option value="__otro">Otro (escribirlo)</option>';
   llenarSelect($('f_ecivil'), CATALOGOS.ecivil);
   llenarSelect($('f_dep'), CATALOGOS.dep);
   llenarSelect($('f_cargoOrg'), CATALOGOS.orgs);
@@ -460,8 +528,20 @@ function init(){
   if(cola.length) setTimeout(sincronizar, 2500);
 }
 
+function cambioEntrevistador(){
+  const otro = $('cfgLista').value === '__otro';
+  $('cfgNombre').classList.toggle('oculto', !otro);
+  if(otro) $('cfgNombre').focus();
+}
+
+function nombreElegido(){
+  const v = $('cfgLista').value;
+  if(v === '__otro') return $('cfgNombre').value.trim();
+  return v;
+}
+
 function guardarConfig(){
-  const n = $('cfgNombre').value.trim();
+  const n = nombreElegido();
   if(!n){ $('cfgErr').classList.remove('oculto'); return; }
   cfg = { entrevistador:n, domingo:$('cfgDomingo').value };
   localStorage.setItem(LS.cfg, JSON.stringify(cfg));
@@ -473,9 +553,14 @@ function abrirConfig(){
   $('cfgErr').classList.add('oculto');
   const yaHay = !!cfg;
   if(yaHay){
-    $('cfgNombre').value = cfg.entrevistador;
+    if(CATALOGOS.equipo.includes(cfg.entrevistador)){
+      $('cfgLista').value = cfg.entrevistador; $('cfgNombre').value='';
+    } else {
+      $('cfgLista').value = '__otro'; $('cfgNombre').value = cfg.entrevistador;
+    }
     $('cfgDomingo').value = cfg.domingo;
-  }
+  } else { $('cfgLista').value=''; $('cfgNombre').value=''; }
+  cambioEntrevistador();
   $('cfgPaso').textContent   = yaHay ? 'Mis datos' : 'Antes de empezar';
   $('cfgTitulo').textContent = yaHay ? 'Cambiar mis datos' : 'Identifícate';
   $('btnCfgOk').textContent  = yaHay ? 'Guardar' : 'Comenzar';
@@ -514,31 +599,58 @@ function mostrar(id){
 function volver(){ $('q').value=''; $('resultados').innerHTML=''; pintarHoy(); mostrar('pBuscar'); }
 
 /* ---------- búsqueda en el padrón ---------- */
-function buscar(){
-  const q = norm($('q').value);
-  const cont = $('resultados');
-  if(q.length < 2){ cont.innerHTML=''; return; }
-  const toks = q.split(/\s+/);
-  const res = PADRON.filter(p=>{
-    const partes = p.k.split(/\s+/);
-    return toks.every(t => partes.some(w => w.startsWith(t)));
-  }).slice(0,8);
-  if(!res.length){
-    cont.innerHTML = `<p class="hint" style="padding:8px 2px">Sin coincidencias en el banco.
-      Usa el botón de abajo para registrarla como persona nueva.</p>`;
-    return;
-  }
-  cont.innerHTML = res.map(p=>{
-    const ya = hechos.some(h=>h.id===p.id) || cola.some(c=>c.id_banco===p.id);
-    const edad = p.e!=='' ? (p.a? `~${p.e} años` : `${p.e} años`) : 'edad sin dato';
-    const est = p.est==='Inactivo' ? ' · <b>marcado Inactivo</b>' : '';
-    return `<div class="res ${ya?'yacapt':''}" onclick="abrirForm('${p.id}')">
+function yaCensado(p){
+  if(hechos.some(h=>h.id===p.id) || cola.some(c=>c.id_banco===p.id)) return 'hoy';
+  return p.d || '';
+}
+
+function tarjeta(p, esParecido){
+  const ya = yaCensado(p);
+  const edad = p.e!=='' ? (p.a? `~${p.e} años` : `${p.e} años`) : 'edad sin dato';
+  const est = p.est==='Inactivo' ? ' · <b>marcado Inactivo</b>' : '';
+  let marca = '';
+  if(ya==='hoy') marca = '<span class="badge b-hoy">Ya lo censaste hoy</span>';
+  else if(ya)    marca = `<span class="badge b-dom">Ya censado · ${ya}</span>`;
+  else if(p.nv)  marca = '<span class="badge b-nuevo">Registrada en el censo</span>';
+  return `<div class="res ${ya?'yacapt':''} ${esParecido?'parecido':''}" onclick="abrirForm('${p.id}')">
       <div style="flex:1">
         <div class="nom">${p.n}</div>
         <div class="sub">${edad} · ${p.c||'sin organización'}${est}</div>
-        ${ya?'<div style="margin-top:5px"><span class="badge b-ok">Ya censado</span></div>':''}
+        ${marca?`<div style="margin-top:5px">${marca}</div>`:''}
       </div><div class="flecha">›</div></div>`;
-  }).join('');
+}
+
+function buscar(){
+  const consulta = partir($('q').value);
+  const cont = $('resultados');
+  if(!consulta.length || $('q').value.trim().length < 2){
+    cont.innerHTML=''; $('avisoNuevo').classList.add('oculto'); return;
+  }
+  const exactos=[], parecidos=[];
+  for(const p of PADRON){
+    if(!p.tk) p.tk = p.k.split(' ').filter(Boolean);
+    const c = calificar(consulta, p.tk);
+    if(c.coinciden === 0) continue;
+    const todas = c.coinciden === consulta.length;
+    if(todas && c.exactos === consulta.length) exactos.push([p,c]);
+    else if(todas || (consulta.length>=2 && c.coinciden >= consulta.length-1)) parecidos.push([p,c]);
+  }
+  const ordenar = a => a.sort((x,y)=> y[1].exactos-x[1].exactos || y[1].total-x[1].total
+                                   || x[0].n.length-y[0].n.length).slice(0,6);
+  const ex = ordenar(exactos), pa = ordenar(parecidos);
+
+  let html = '';
+  if(ex.length) html += ex.map(([p])=>tarjeta(p,false)).join('');
+  if(pa.length){
+    html += `<div class="tituloRes">${ex.length?'También se parecen':'¿Será alguna de estas?'}</div>`
+          + pa.map(([p])=>tarjeta(p,true)).join('');
+  }
+  if(!html){
+    html = `<p class="hint" style="padding:8px 2px">No aparece nadie con ese nombre.
+      <b>Prueba escribiendo solo el apellido</b> antes de registrarla como nueva.</p>`;
+  }
+  cont.innerHTML = html;
+  $('avisoNuevo').classList.toggle('oculto', !(ex.length || pa.length));
 }
 
 /* ---------- abrir formulario ---------- */
@@ -557,11 +669,15 @@ function abrirForm(id){
 
   if(actual){
     $('formTitulo').textContent = 'Confirmar datos';
-    const ya = hechos.some(h=>h.id===actual.id) || cola.some(c=>c.id_banco===actual.id);
-    $('formAviso').innerHTML =
-      (ya ? `<div class="aviso">⚠️ Esta persona <b>ya fue censada</b> antes. Solo continúa si estás
-              corrigiendo algo; si no, regresa.</div>` : '') +
-      `<div class="aviso aviso-ok"><b>${actual.n}</b> ya está en el banco (${actual.id}).
+    const ya = yaCensado(actual);
+    const avisoYa = ya==='hoy'
+      ? `<div class="aviso">⚠️ <b>Tú ya censaste a esta persona hoy.</b> Solo continúa si estás
+          corrigiendo algo; si no, regresa y busca a alguien más.</div>`
+      : (ya ? `<div class="aviso">⚠️ <b>Esta persona ya fue censada el ${ya}.</b> No hace falta
+          volver a censarla. Regresa y busca a alguien que todavía no aparezca marcado.</div>` : '');
+    $('formAviso').innerHTML = avisoYa +
+      `<div class="aviso aviso-ok"><b>${actual.n}</b> ${actual.nv
+          ? 'fue registrada durante el censo' : 'ya está en el banco'} (${actual.id}).
         Los datos precargados <b>confírmalos en voz alta y corrige lo que esté mal</b>.
         La fecha de nacimiento y el teléfono <b>siempre se preguntan de nuevo</b>${
         actual.e!=='' ? ` (en el banco figura con ${actual.a?'aproximadamente ':''}<b>${actual.e} años</b>)` : ''}.</div>`;
@@ -653,7 +769,6 @@ function guardarRegistro(){
     uid: Date.now()+'-'+Math.random().toString(36).slice(2,7),
     enviado_en: new Date().toISOString(),
     entrevistador: cfg.entrevistador,
-    puesto: '',
     domingo: cfg.domingo,
     tipo: actual ? 'Confirmacion' : 'Nuevo',
     id_banco: actual ? actual.id : '',
