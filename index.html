@@ -132,6 +132,10 @@ table.log td{padding:7px 4px;border-bottom:1px solid #eef1f5}
     <p class="paso" id="cfgPaso">Antes de empezar</p>
     <h2 id="cfgTitulo">Identifícate</h2>
     <p class="hint" id="cfgSub">Queda guardado en este dispositivo. Puedes cambiarlo cuando quieras.</p>
+    <div class="aviso oculto" id="cfgAviso" style="margin-top:12px">
+      👋 <b>Empieza una jornada nueva.</b> Confirma tu nombre y escoge la jornada de hoy antes de
+      seguir capturando. Lo que ya capturaste no se pierde.
+    </div>
     <div class="campo" style="margin-top:16px">
       <label class="req">Tu nombre (entrevistador)</label>
       <select id="cfgLista" onchange="cambioEntrevistador()"></select>
@@ -140,16 +144,10 @@ table.log td{padding:7px 4px;border-bottom:1px solid #eef1f5}
       <p class="hint">Elige tu nombre de la lista. Si no está, escoge <b>Otro</b> y escríbelo.</p>
     </div>
     <div class="campo">
-      <label class="req">Domingo del censo</label>
-      <select id="cfgDomingo">
-        <option value="Domingo 1">Domingo 1</option>
-        <option value="Domingo 2">Domingo 2</option>
-        <option value="Domingo 3">Domingo 3</option>
-        <option value="Domingo 4">Domingo 4</option>
-        <option value="Domingo 5">Domingo 5</option>
-      </select>
-      <p class="hint"><b>Cámbialo cada domingo.</b> De esto depende saber en cuál domingo se
-      censó a cada persona.</p>
+      <label class="req">Jornada de captura</label>
+      <select id="cfgDomingo"></select>
+      <p class="hint"><b>Escoge la jornada que estás por empezar.</b> De esto depende saber en
+      cuál de las tres se censó a cada persona.</p>
     </div>
     <button class="btn-p" id="btnCfgOk" onclick="guardarConfig()">Comenzar</button>
     <button class="btn-g oculto" id="btnCfgCancel" style="margin-top:8px" onclick="volver()">Cancelar</button>
@@ -161,6 +159,8 @@ table.log td{padding:7px 4px;border-bottom:1px solid #eef1f5}
       puesto y la lista de personas capturadas. <b>No borra nada de lo que ya llegó a la hoja de
       cálculo</b> — eso se borra desde la hoja.</p>
       <button class="btn-o" onclick="reiniciarTodo()">Borrar y empezar de cero</button>
+      <p class="hint" style="margin-top:8px">Normalmente <b>no hace falta usar esto</b>. Para
+      cambiar de jornada basta con escoger otra arriba y guardar.</p>
     </div>
   </div>
 </div>
@@ -190,7 +190,7 @@ table.log td{padding:7px 4px;border-bottom:1px solid #eef1f5}
     </button>
   </div>
   <div class="card" id="cardHoy" style="display:none">
-    <h3 style="margin-top:0">Capturados hoy por ti</h3>
+    <h3 style="margin-top:0">Capturados por ti en esta jornada</h3>
     <table class="log" id="tablaHoy"></table>
   </div>
   <div class="barra">
@@ -240,11 +240,13 @@ table.log td{padding:7px 4px;border-bottom:1px solid #eef1f5}
       <div class="campo"><label>Municipio</label><input id="f_mun"></div>
     </div>
     <div class="campo">
-      <label>Zona / Colonia / Aldea</label>
-      <input id="f_zona" autocapitalize="words">
+      <label>Zona</label>
+      <select id="f_zona"></select>
+      <p class="hint">Si vive en aldea, aserradero o parcelamiento, marca <b>Fuera de zona</b> y
+      escribe el nombre del lugar abajo, en Dirección específica.</p>
     </div>
     <div class="campo">
-      <label>Dirección específica <span class="opt">(calle, avenida, No. de casa)</span></label>
+      <label>Dirección específica <span class="opt">(colonia, aldea, calle, avenida, No. de casa)</span></label>
       <input id="f_dir" autocapitalize="sentences">
     </div>
     <div class="campo">
@@ -374,11 +376,29 @@ table.log td{padding:7px 4px;border-bottom:1px solid #eef1f5}
    ========================================================== */
 
 const CATALOGOS = {
-  // Equipo de entrevistadores. Se eligen de lista para que el nombre no se
-  // escriba de dos formas distintas ("Rene" y "René" partieron a una persona
-  // en dos filas al analizar el Domingo 1).
-  equipo:   ["Alba Abigail Orozco Payes","Karla Orozco","Kevin Vásquez","Maylín Arriaza",
-             "Mayérlin Ortíz","René Barrera","Steffany Peláez Carranza"],
+  // Equipo de captura. Se elige de lista para que el nombre no se escriba de dos
+  // formas distintas ("Rene" y "René" partieron a una persona en dos al analizar
+  // el Domingo 1). Van agrupados, pero en la hoja se guarda solo el nombre.
+  // Equivalencias con lo ya capturado en los Domingos 1-3, para el reporte final:
+  //   "Mayérlin Abigail Ortiz Ruiz" = "Mayérlin Ortíz" (8 entrevistas del Domingo 1)
+  //   "Alba Orozco"                 = "Alba Abigail Orozco Payes"
+  //   "Steffany Peláez"             = "Steffany Peláez carranza"
+  //   "René Barrera"                = "Rene Barrera"
+  equipo: [
+    {grupo:"Ministerio", nombres:[
+      "Alba Orozco","Belén Luna","Bryan Castro","Karla Orozco","Kevin Vásquez",
+      "Lynda Morales","Maylín Arriaza","Mayérlin Abigail Ortiz Ruiz","René Barrera",
+      "Steffany Peláez"]},
+    {grupo:"Auxiliares", nombres:[
+      "Alba Molina","Alison Melissa de los Santos","Guillermo Osorio",
+      "Jailene Véliz","José Adán Vega"]}
+  ],
+  // Jornadas de captura. Se guardan en la columna "domingo" de la hoja, que no
+  // cambia de nombre para no tocar el Apps Script ni lo ya capturado.
+  jornadas: ["Sábado 5 sep",
+             "Domingo 6 sep - Escuela Dominical",
+             "Domingo 6 sep - Santa Cena"],
+  zonas:    ["","Zona 1","Zona 2","Zona 3","Zona 4","Zona 5","Zona 6","Zona 7","Fuera de zona"],
   ecivil:   ["","Soltero(a)","Casado(a)","Unido(a) de hecho","Divorciado(a)","Viudo(a)"],
   canal:    ["Iglesia Infantil","Embajadores de Cristo","Fraternidad de Varones","Concilio Misionero Femenil"],
   // Grupos de niños. data-v = valor exacto del catálogo del banco.
@@ -515,17 +535,36 @@ function init(){
   pintarChips($('f_bautizado'), CATALOGOS.sino, false);
   pintarChips($('f_tieneCargo'), ["No","Si"], false);
   $('cfgLista').innerHTML = '<option value="">— Elige tu nombre —</option>'
-    + CATALOGOS.equipo.map(v=>`<option value="${esc(v)}">${v}</option>`).join('')
+    + CATALOGOS.equipo.map(g=>`<optgroup label="${esc(g.grupo)}">`
+        + g.nombres.map(v=>`<option value="${esc(v)}">${v}</option>`).join('')
+        + '</optgroup>').join('')
     + '<option value="__otro">Otro (escribirlo)</option>';
+  llenarSelect($('cfgDomingo'), CATALOGOS.jornadas);
+  llenarSelect($('f_zona'), CATALOGOS.zonas);
   llenarSelect($('f_ecivil'), CATALOGOS.ecivil);
   llenarSelect($('f_dep'), CATALOGOS.dep);
   llenarSelect($('f_cargoOrg'), CATALOGOS.orgs);
   llenarSelect($('f_cargoPuesto'), CATALOGOS.puestos);
   $('f_fnac').onchange = mostrarEdad;
-  if(cfg){ pintarHeader(); pintarHoy(); mostrar('pBuscar'); }
-  else abrirConfig();
+  if(cfg && !jornadaVencida()){ pintarHeader(); pintarHoy(); mostrar('pBuscar'); }
+  else abrirConfig(cfg ? 'nueva-jornada' : '');
   actualizarPendientes();
   if(cola.length) setTimeout(sincronizar, 2500);
+}
+
+/* Cada jornada de captura empieza con el equipo identificándose de nuevo.
+   Se considera que la jornada venció si la última identificación fue en otro
+   día, o si ya pasaron más de 4 horas (el domingo hay dos jornadas: Escuela
+   Dominical por la mañana y Santa Cena por la noche). */
+function jornadaVencida(){
+  if(!cfg || !cfg.ts) return true;
+  const antes = new Date(cfg.ts), ahora = new Date();
+  if(antes.toDateString() !== ahora.toDateString()) return true;
+  return (ahora - antes) > 4*60*60*1000;
+}
+
+function enElEquipo(nombre){
+  return CATALOGOS.equipo.some(g => g.nombres.includes(nombre));
 }
 
 function cambioEntrevistador(){
@@ -543,28 +582,32 @@ function nombreElegido(){
 function guardarConfig(){
   const n = nombreElegido();
   if(!n){ $('cfgErr').classList.remove('oculto'); return; }
-  cfg = { entrevistador:n, domingo:$('cfgDomingo').value };
+  cfg = { entrevistador:n, domingo:$('cfgDomingo').value, ts: Date.now() };
   localStorage.setItem(LS.cfg, JSON.stringify(cfg));
-  pintarHeader(); pintarHoy(); mostrar('pBuscar');
+  pintarHeader(); pintarHoy(); actualizarPendientes(); mostrar('pBuscar');
 }
 
 /* Abre la pantalla de configuración para cambiar nombre, puesto o domingo. */
-function abrirConfig(){
+function abrirConfig(motivo){
   $('cfgErr').classList.add('oculto');
   const yaHay = !!cfg;
   if(yaHay){
-    if(CATALOGOS.equipo.includes(cfg.entrevistador)){
+    if(enElEquipo(cfg.entrevistador)){
       $('cfgLista').value = cfg.entrevistador; $('cfgNombre').value='';
     } else {
       $('cfgLista').value = '__otro'; $('cfgNombre').value = cfg.entrevistador;
     }
-    $('cfgDomingo').value = cfg.domingo;
+    if(CATALOGOS.jornadas.includes(cfg.domingo)) $('cfgDomingo').value = cfg.domingo;
   } else { $('cfgLista').value=''; $('cfgNombre').value=''; }
   cambioEntrevistador();
-  $('cfgPaso').textContent   = yaHay ? 'Mis datos' : 'Antes de empezar';
-  $('cfgTitulo').textContent = yaHay ? 'Cambiar mis datos' : 'Identifícate';
-  $('btnCfgOk').textContent  = yaHay ? 'Guardar' : 'Comenzar';
-  $('btnCfgCancel').classList.toggle('oculto', !yaHay);
+
+  const nuevaJornada = motivo === 'nueva-jornada';
+  $('cfgAviso').classList.toggle('oculto', !nuevaJornada);
+  $('cfgPaso').textContent   = nuevaJornada ? 'Nueva jornada' : (yaHay ? 'Mis datos' : 'Antes de empezar');
+  $('cfgTitulo').textContent = nuevaJornada ? 'Identifícate para empezar'
+                                            : (yaHay ? 'Cambiar mis datos' : 'Identifícate');
+  $('btnCfgOk').textContent  = nuevaJornada ? 'Empezar la jornada' : (yaHay ? 'Guardar' : 'Comenzar');
+  $('btnCfgCancel').classList.toggle('oculto', !yaHay || nuevaJornada);
   $('zonaReinicio').classList.toggle('oculto', !yaHay);
   mostrar('pConfig');
 }
@@ -600,7 +643,8 @@ function volver(){ $('q').value=''; $('resultados').innerHTML=''; pintarHoy(); m
 
 /* ---------- búsqueda en el padrón ---------- */
 function yaCensado(p){
-  if(hechos.some(h=>h.id===p.id) || cola.some(c=>c.id_banco===p.id)) return 'hoy';
+  const mio = hechos.find(h=>h.id===p.id) || cola.find(c=>c.id_banco===p.id);
+  if(mio) return (mio.j || mio.domingo) === cfg.domingo ? 'hoy' : (mio.j || mio.domingo || 'antes');
   return p.d || '';
 }
 
@@ -609,7 +653,7 @@ function tarjeta(p, esParecido){
   const edad = p.e!=='' ? (p.a? `~${p.e} años` : `${p.e} años`) : 'edad sin dato';
   const est = p.est==='Inactivo' ? ' · <b>marcado Inactivo</b>' : '';
   let marca = '';
-  if(ya==='hoy') marca = '<span class="badge b-hoy">Ya lo censaste hoy</span>';
+  if(ya==='hoy') marca = '<span class="badge b-hoy">Ya lo censaste en esta jornada</span>';
   else if(ya)    marca = `<span class="badge b-dom">Ya censado · ${ya}</span>`;
   else if(p.nv)  marca = '<span class="badge b-nuevo">Registrada en el censo</span>';
   return `<div class="res ${ya?'yacapt':''} ${esParecido?'parecido':''}" onclick="abrirForm('${p.id}')">
@@ -671,7 +715,7 @@ function abrirForm(id){
     $('formTitulo').textContent = 'Confirmar datos';
     const ya = yaCensado(actual);
     const avisoYa = ya==='hoy'
-      ? `<div class="aviso">⚠️ <b>Tú ya censaste a esta persona hoy.</b> Solo continúa si estás
+      ? `<div class="aviso">⚠️ <b>Tú ya censaste a esta persona en esta jornada.</b> Solo continúa si estás
           corrigiendo algo; si no, regresa y busca a alguien más.</div>`
       : (ya ? `<div class="aviso">⚠️ <b>Esta persona ya fue censada el ${ya}.</b> No hace falta
           volver a censarla. Regresa y busca a alguien que todavía no aparezca marcado.</div>` : '');
@@ -798,11 +842,12 @@ function guardarRegistro(){
   };
   cola.push(reg);
   hechos.push({id: reg.id_banco, uid: reg.uid, nombre: reg.nombre, tipo: reg.tipo,
+               j: cfg.domingo,
                hora: new Date().toLocaleTimeString('es-GT',{hour:'2-digit',minute:'2-digit'})});
   guardarLS(); actualizarPendientes();
   $('exitoNombre').textContent = nombre;
   $('exitoDetalle').textContent = (actual ? 'Datos confirmados y actualizados.' : 'Registrado como persona nueva.')
-    + ' Llevas ' + hechos.length + ' hoy.';
+    + ' Llevas ' + deEstaJornada().length + ' en esta jornada.';
   mostrar('pExito');
   sincronizar();
 }
@@ -832,8 +877,10 @@ async function sincronizar(){
   actualizarPendientes();
 }
 
+const deEstaJornada = () => cfg ? hechos.filter(h=>h.j===cfg.domingo) : hechos;
+
 function actualizarPendientes(modo){
-  $('hdrCont').textContent = hechos.length;
+  $('hdrCont').textContent = deEstaJornada().length;
   $('hdrCont').className = 'contador' + (cola.length?' pend':'');
   const a = $('avisoPend');
   if(modo==='sin-config'){
@@ -848,10 +895,10 @@ function actualizarPendientes(modo){
 }
 
 function pintarHoy(){
-  const c=$('cardHoy'), t=$('tablaHoy');
-  if(!hechos.length){ c.style.display='none'; return; }
+  const c=$('cardHoy'), t=$('tablaHoy'), lista=deEstaJornada();
+  if(!lista.length){ c.style.display='none'; return; }
   c.style.display='block';
-  t.innerHTML = hechos.slice(-12).reverse().map(h=>
+  t.innerHTML = lista.slice(-12).reverse().map(h=>
     `<tr><td>${h.nombre}</td>
      <td style="text-align:right"><span class="badge ${h.tipo==='Nuevo'?'b-nuevo':'b-ok'}">${h.tipo}</span>
      <span class="mini"> ${h.hora}</span></td></tr>`).join('');
@@ -859,8 +906,9 @@ function pintarHoy(){
 
 function verEnvios(){
   $('envDetalle').innerHTML = `
-    <p style="font-size:34px;font-weight:800;margin:12px 0 0;color:#123B63">${hechos.length}</p>
-    <p class="hint" style="margin:0">personas capturadas por ti</p>
+    <p style="font-size:34px;font-weight:800;margin:12px 0 0;color:#123B63">${deEstaJornada().length}</p>
+    <p class="hint" style="margin:0">personas capturadas por ti en esta jornada</p>
+    <p class="hint" style="margin:6px 0 0">(${hechos.length} en total, contando jornadas anteriores)</p>
     <p style="font-size:34px;font-weight:800;margin:18px 0 0;color:${cola.length?'#b45309':'#0f7b3d'}">${cola.length}</p>
     <p class="hint" style="margin:0">pendientes de enviar</p>`;
   mostrar('pEnvios');
